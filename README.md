@@ -8,3 +8,7 @@ co-training with VGG16 、RSM and BVSB
 
     链接：https://pan.baidu.com/s/1rLd6Ph09Y69V37H0kRLIOg
     提取码：jziv
+
+# Requirements
+
+Python3.8 
