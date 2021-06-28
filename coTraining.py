@@ -2,10 +2,13 @@ import numpy
 from sklearn.svm import SVC
 import numpy as np
 import operator
+from Pretreatment import Pretreatment
+
 
 
 class COTraining(object):
-    def __init__(self, train_x: np.ndarray, train_y: np.ndarray, iter_x: np.ndarray, iter_y: np.ndarray):
+    def __init__(self, train_x: np.ndarray, train_y: np.ndarray, iter_x: np.ndarray, iter_y: np.ndarray,RSMSize=0.9):
+
         assert train_x.ndim == 2
         assert train_y.ndim == 1
         assert iter_x.ndim == 2
@@ -13,29 +16,48 @@ class COTraining(object):
         assert train_x.shape[0] == train_y.shape[0]
         assert iter_x.shape[0] == iter_y.shape[0]
         assert train_x.shape[1] == iter_x.shape[1]
+        self.originDataDim=train_x.shape[1]
         self.firstClassifier = SVC(probability=True)
         self.secondClassifier = SVC(probability=True)
-        self.train_x = train_x
+        self.first_train_x = np.copy(train_x)
+        self.second_train_x=np.copy(train_x)
         self.train_y = train_y
-        self.iter_x = iter_x
+        self.first_iter_x = np.copy(iter_x)
+        self.second_iter_x=np.copy(iter_x)
         self.iter_y = iter_y
         self.isIter = True
         self.singleIterMaxLength = len(self.iter_y) * 0.05
-        self.allIterMaxLength=len(self.iter_y)*0.5
+        self.allIterMaxLength = len(self.iter_y) * 0.5
+        assert  RSMSize>0
+        assert RSMSize<self.originDataDim
+        if RSMSize<1:
+            self.RSMSize=int(train_x.shape[1]*RSMSize)
+        else:
+            self.RSMSize=int(RSMSize)
+        self.firstRSMIndex=np.array(range(self.originDataDim))
+        self.secondRSMIndex=np.array(range(self.originDataDim))
 
-    def fit(self,test_x,test_y):
+    def createRSM(self):
+        self.firstRSMIndex=Pretreatment.createRSMIndex(self.originDataDim,self.RSMSize)
+        self.secondRSMIndex=Pretreatment.createRSMIndex(self.originDataDim,self.RSMSize)
+        self.first_train_x=self.first_train_x[:,self.firstRSMIndex]
+        self.second_train_x=self.second_train_x[:,self.secondRSMIndex]
+        self.first_iter_x=self.first_iter_x[:,self.firstRSMIndex]
+        self.second_iter_x=self.second_iter_x[:,self.secondRSMIndex]
+
+    def fit(self, test_x, test_y):
         while self.isIter:
-            self.firstClassifier.fit(self.train_x, self.train_y)
-            self.secondClassifier.fit(self.train_x, self.train_y)
-            proba1 = self.firstClassifier.predict_proba(self.iter_x)
-            proba2 = self.secondClassifier.predict_proba(self.iter_x)
+            self.firstClassifier.fit(self.first_train_x, self.train_y)
+            self.secondClassifier.fit(self.second_train_x, self.train_y)
+            proba1 = self.firstClassifier.predict_proba(self.first_iter_x)
+            proba2 = self.secondClassifier.predict_proba(self.second_iter_x)
             iterIndex = self.getIterDataIndex(proba1, proba2)
             if len(iterIndex) == 0:
                 self.isIter = False
-            if len(self.iter_y)<self.allIterMaxLength:
-                self.isIter=False
+            if len(self.iter_y) < self.allIterMaxLength:
+                self.isIter = False
             self.resetTrainAndIterData(iterIndex)
-            print(self.score(test_x,test_y))
+            print(self.score(test_x, test_y))
 
     '''
         获取类别相同的数据的索引
@@ -54,14 +76,16 @@ class COTraining(object):
     def _bvsbIndex(self, proba1, filter=0.7):
         assert proba1.shape[1] >= 2
         tmp = np.sort(proba1, axis=1)
-        _bvsb = tmp[:, -1] = tmp[:, -2]
+        _bvsb = tmp[:, -1] - tmp[:, -2]
         resIndex = []
         for i in range(len(proba1)):
             if _bvsb[i] > filter:
                 resIndex.append(i)
-        maxSize = min(self.singleIterMaxLength * 2, len(resIndex)) * -1
-        resultIndex = np.argsort(_bvsb[resIndex])[maxSize:]
-        return resultIndex
+        maxSize = int(min(self.singleIterMaxLength * 2, len(resIndex)) * -1)
+        #满足的值的前maxSize个索引
+        index = np.argsort(_bvsb[resIndex])[maxSize:]
+        #最终的索引
+        return np.array(resIndex)[index]
 
     # 获取下一次迭代需要添加的数据的索引
     def getIterDataIndex(self, proba1, proba2):
@@ -74,37 +98,38 @@ class COTraining(object):
 
     # 将下一次需要迭代训练的数据添加到训练集中
     def resetTrainAndIterData(self, iterDataIndex):
-        prepareData = self.iter_x[iterDataIndex]
         prepareY = self.iter_y[iterDataIndex]
-        self.train_x = numpy.append(self.train_x, prepareData, axis=0)
+        self.first_train_x = numpy.append(self.first_train_x, self.first_iter_x[iterDataIndex], axis=0)
+        self.second_train_x=numpy.append(self.second_train_x,self.second_iter_x[iterDataIndex],axis=0)
         self.train_y = numpy.append(self.train_y, prepareY, axis=0)
-        self.iter_x = np.delete(self.iter_x, iterDataIndex, axis=0)
+        self.first_iter_x = np.delete(self.first_iter_x, iterDataIndex, axis=0)
+        self.second_iter_x=np.delete(self.second_iter_x,iterDataIndex,axis=0)
         self.iter_y = np.delete(self.iter_y, iterDataIndex, axis=0)
 
     def predict(self, test_x):
-        proba1 = self.firstClassifier.predict_proba(test_x)
-        proba2 = self.firstClassifier.predict_proba(test_x)
+        first_test_x=test_x[:,self.firstRSMIndex]
+        second_test_x=test_x[:,self.secondRSMIndex]
+        proba1 = self.firstClassifier.predict_proba(first_test_x)
+        proba2 = self.secondClassifier.predict_proba(second_test_x)
         res1 = np.argmax(proba1, axis=1)
         res2 = np.argmax(proba2, axis=1)
         sameIndex = np.argwhere(res1 == res2).flatten().astype(int)
         result = np.zeros((test_x.shape[0],))
         result[sameIndex] = res1[sameIndex] + 1
-        if len(sameIndex)<test_x.shape[0]:
-            notSameIndex = np.delete(np.arange(len(res1)), sameIndex, axis=0)
-            maxProba1=proba1[:, res1[notSameIndex]]
-            maxProba2=proba2[:, res2[notSameIndex]]
-            noSamePredict = self._getMaxProbaIndex(maxProba1, maxProba2)
-            result[notSameIndex] = noSamePredict + 1
+        if len(sameIndex) < test_x.shape[0]:
+            notSameIndex = np.delete(np.arange(len(res1)), sameIndex)
+            first_max_p=np.sort(proba1,axis=1)[notSameIndex,-1]
+            first_max_i=np.argsort(proba1,axis=1)[notSameIndex,-1]
+            second_max_p=np.sort(proba2,axis=1)[notSameIndex,-1]
+            second_max_i=np.sort(proba2,axis=1)[notSameIndex,-1]
+            notSameC=[]
+            for i in range(len(notSameIndex)):
+                if first_max_p[i]>second_max_p[i]:
+                    notSameC.append(first_max_i[i])
+                else:
+                    notSameC.append(second_max_i[i])
+            result[notSameIndex] = np.array(notSameC) + 1
         return result
-
-    def _getMaxProbaIndex(self, maxProba1, maxProba2, index1, index2):
-        res = np.zeros((len(maxProba1),))
-        for i in range(len(maxProba1)):
-            if maxProba1[i] > maxProba2[i]:
-                res[i] = index1[i]
-            else:
-                res[i] = index2[i]
-        return res
 
     def score(self, test_x, test_y):
         predict = self.predict(test_x)

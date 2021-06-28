@@ -11,7 +11,9 @@ train_x,test_x,train_y,test_y=train_test_split(data,stand,test_size=0.8)
 
 final_test_x=np.copy(test_x)
 final_test_y=np.copy(test_y)
+from  collections import Counter
 
+ttt=Counter(stand)
 
 
 co=COTraining(train_x,train_y,test_x,test_y)

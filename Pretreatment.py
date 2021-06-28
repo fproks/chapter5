@@ -189,6 +189,12 @@ class Pretreatment():
         delete_index = index[0:data.shape[1] - featureNumber]
         return np.delete(data, delete_index, axis=1)
 
+    @staticmethod
+    def createRSMIndex(Dimension, PresetD):
+        assert Dimension > PresetD
+        return np.sort(np.random.permutation(np.array(range(Dimension)))[0:PresetD])
+
+
 
 if __name__ == '__main__':
     [a, b] = Pretreatment.readGrayImageToDATA(r"F:\dataset4\flowers17\flowers17\test", image_size=500)
