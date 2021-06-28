@@ -47,6 +47,7 @@ class COTraining(object):
 
     def fit(self, test_x, test_y):
         while self.isIter:
+            print("------------------------TRAIN----------------------------------")
             self.firstClassifier.fit(self.first_train_x, self.train_y)
             self.secondClassifier.fit(self.second_train_x, self.train_y)
             proba1 = self.firstClassifier.predict_proba(self.first_iter_x)
@@ -115,7 +116,7 @@ class COTraining(object):
         res2 = np.argmax(proba2, axis=1)
         sameIndex = np.argwhere(res1 == res2).flatten().astype(int)
         result = np.zeros((test_x.shape[0],))
-        result[sameIndex] = res1[sameIndex] + 1
+        result[sameIndex] = res1[sameIndex]
         if len(sameIndex) < test_x.shape[0]:
             notSameIndex = np.delete(np.arange(len(res1)), sameIndex)
             first_max_p=np.sort(proba1,axis=1)[notSameIndex,-1]
@@ -128,10 +129,10 @@ class COTraining(object):
                     notSameC.append(first_max_i[i])
                 else:
                     notSameC.append(second_max_i[i])
-            result[notSameIndex] = np.array(notSameC) + 1
+            result[notSameIndex] = np.array(notSameC)
         return result
 
     def score(self, test_x, test_y):
-        predict = self.predict(test_x)
+        predict = self.predict(test_x).astype(int)
         from sklearn.metrics import accuracy_score
         return accuracy_score(test_y, predict)
