@@ -8,7 +8,7 @@ _tmp = sio.loadmat("./data_set/vggdata.mat")
 data = _tmp["data"]
 stand = _tmp["target"].flatten()
 stand=LabelEncoder().fit_transform(stand)
-train_x,test_x,train_y,test_y=train_test_split(data,stand,test_size=0.8)
+train_x,test_x,train_y,test_y=train_test_split(data,stand,test_size=0.95,random_state=42)
 
 svm=SVC()
 svm.fit(train_x,train_y)

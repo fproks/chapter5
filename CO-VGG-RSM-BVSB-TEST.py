@@ -6,7 +6,7 @@ from sklearn.svm import SVC
 from coTraining import COTraining
 from sklearn.decomposition import PCA
 
-_tmp = sio.loadmat("./data_set/cifar_vgg_data_l2.mat")
+_tmp = sio.loadmat("./data_set/vggdata.mat")
 data = _tmp["data"]
 stand = _tmp["target"].flatten()
 stand = LabelEncoder().fit_transform(stand)
@@ -15,7 +15,7 @@ pca=PCA(n_components=300)
 data=pca.fit_transform(data)
 
 
-train_x, test_x, train_y, test_y = train_test_split(data, stand, test_size=0.95)
+train_x, test_x, train_y, test_y = train_test_split(data, stand, test_size=0.95,random_state=42)
 
 final_test_x = np.copy(test_x)
 final_test_y = np.copy(test_y)
