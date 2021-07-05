@@ -8,6 +8,7 @@ import torch
 import torch.nn
 import torchvision.models as models
 import torchvision.transforms as transforms
+from sklearn.decomposition import PCA
 from torch.autograd import Variable
 from sklearn import preprocessing
 from scipy.cluster.vq import *
@@ -156,7 +157,7 @@ class Pretreatment():
             block_size = (num_cells_per_block[0] * cell_size[0],
                           num_cells_per_block[1] * cell_size[1])
 
-            # Calculate the number of cells that fit in our image in the x and y directions
+            # Calculate the number of cells that fitWithRSMAndBVSB in our image in the x and y directions
             x_cells = gray_image.shape[1] // cell_size[0]
             y_cells = gray_image.shape[0] // cell_size[1]
 
@@ -191,9 +192,15 @@ class Pretreatment():
 
     @staticmethod
     def createRSMIndex(Dimension, PresetD):
-        assert Dimension > PresetD
+        assert Dimension >= PresetD
+        if Dimension == PresetD:
+            return np.arange(Dimension)
         return np.sort(np.random.permutation(np.array(range(Dimension)))[0:PresetD])
 
+    @staticmethod
+    def dimensionWithPCA(data,n_components=300):
+        pca = PCA(n_components=300)
+        return pca.fit_transform(data)
 
 
 if __name__ == '__main__':
