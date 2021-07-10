@@ -10,8 +10,8 @@ from config import LOGGER
 class COTraining(object):
     def __init__(self, train_x: np.ndarray, train_y: np.ndarray, iter_x: np.ndarray, iter_y: np.ndarray,
                  needRSM=True, RSMSize=0.9,
-                 needBVSB=True,bvsbFilter=0.7,
-                 iterPrecent=0.1,maxRemainPercent=0.5):
+                 needBVSB=True, bvsbFilter=0.7,
+                 iterPrecent=0.1, maxRemainPercent=0.5):
         assert train_x.ndim == 2
         assert train_y.ndim == 1
         assert iter_x.ndim == 2
@@ -42,7 +42,7 @@ class COTraining(object):
             self.createRSM(RSMSize)
         else:
             LOGGER.debug(f"needRSMis {needRSM},将不会进行RSM")
-        self.needBVSB =needBVSB
+        self.needBVSB = needBVSB
 
     def createRSM(self, RSMSize):
         assert RSMSize > 0
@@ -86,6 +86,7 @@ class COTraining(object):
     '''
         获取类别相同的数据的索引
     '''
+
     def _getSameCategoryIndex(self, proba1: np.ndarray, proba2: np.ndarray) -> np.ndarray:
         category1 = np.argmax(proba1, axis=1)
         category2 = np.argmax(proba2, axis=1)
@@ -95,6 +96,7 @@ class COTraining(object):
     '''
     获取BVSB中大于过滤值且属于前10%的数据
     '''
+
     def _bvsbIndex(self, proba1, filter=0.7):
         LOGGER.debug(f"进行BVSB筛选，filter is {filter}")
         assert proba1.shape[1] >= 2
@@ -105,7 +107,7 @@ class COTraining(object):
             if _bvsb[i] > filter:
                 resIndex.append(i)
         LOGGER.debug(f'满足bvsb间隔大于{filter}的个数为{len(resIndex)}个')
-        maxSize = int(min(self.singleIterMaxLength , len(resIndex)) * -1)
+        maxSize = int(min(self.singleIterMaxLength, len(resIndex)) * -1)
         # 满足的值的前maxSize个索引
         index = np.argsort(_bvsb[resIndex])[maxSize:]
         LOGGER.debug(f'根据条件共需要选出前{maxSize * -1}个')
@@ -115,19 +117,22 @@ class COTraining(object):
     '''
         根据概率对数据进行排序，取排序的单次最大个数
     '''
-    def _probaIndex(self,proba1):
-        LOGGER.debug(f"根据预测概率进行筛选")
-        assert  proba1.shape[1]>=2
-        tmp=np.max(proba1,axis=1)
-        maxSize=int(min(self.singleIterMaxLength,len(tmp))*-1)
-        index=np.argsort(tmp)[maxSize:]
-        return index
 
+    def _probaIndex(self, proba1):
+        LOGGER.debug(f"根据预测概率进行筛选")
+        assert proba1.shape[1] >= 2
+        tmp = np.max(proba1, axis=1)
+        maxSize = int(min(self.singleIterMaxLength, len(tmp)) * -1)
+        index = np.argsort(tmp)[maxSize:]
+        return index
 
     # 获取下一次迭代需要添加的数据的索引
     def getIterDataIndex(self, proba1, proba2):
         sameIndex = self._getSameCategoryIndex(proba1, proba2)
         LOGGER.debug(f'共获取标签相同元素{len(sameIndex)}个')
+        if len(sameIndex) == 0:
+            LOGGER.warn(f"未获取到相同元素数据，数据添加结束")
+            return []
         if self.needBVSB:
             LOGGER.info(f"needBvSB is {self.needBVSB}，进行BVSB筛选")
             index1 = self._bvsbIndex(proba1[sameIndex], self.bvsbFilter)
@@ -137,11 +142,11 @@ class COTraining(object):
         # data_index = sameIndex[_bvsb1_index[tmp]]
         else:
             LOGGER.info(f"needBVSB is {self.needBVSB},进行概率筛选")
-            index1=self._probaIndex(proba1[sameIndex])
-            index2=self._probaIndex(proba2[sameIndex])
+            index1 = self._probaIndex(proba1[sameIndex])
+            index2 = self._probaIndex(proba2[sameIndex])
         LOGGER.debug(f"训练器1 筛选出来{len(index1)}个数据")
         LOGGER.debug(f"训练器2筛选出来{len(index2)}个数据")
-        id = np.intersect1d(index1,index2 )
+        id = np.intersect1d(index1, index2)
         data_index = sameIndex[id]
         LOGGER.debug(f'均满足条件的数据个数有{len(id)}个')
         return data_index
@@ -177,7 +182,6 @@ class COTraining(object):
             else:
                 result[i] = second_max_i[i]
         return result
-
 
     def score(self, test_x, test_y):
         predict = self.predict(test_x).astype(int)
