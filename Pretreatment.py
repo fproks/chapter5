@@ -158,37 +158,34 @@ class Pretreatment():
     @staticmethod
     def featureExtractionHOG(imageList: list) -> list:
         resultList = []
-        des_list = []
-        kps_list = []
-        numWords = 1000
         i=0
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img=cv2.resize(img,(128,128))
+        cell_size = (16, 16)
+        num_cells_per_block = (1, 1)
+        block_size = (num_cells_per_block[0] * cell_size[0],
+                      num_cells_per_block[1] * cell_size[1])
+
+        # Calculate the number of cells that fitWithRSMAndBVSB in our image in the x and y directions
+        x_cells = img.shape[1] // cell_size[0]
+        y_cells = img.shape[0] // cell_size[1]
+
+        h_stride = 1
+        v_stride = 1
+
+        # Block Stride in pixels (horizantal, vertical). Must be an integer multiple of Cell Size
+        block_stride = (cell_size[0] * h_stride, cell_size[1] * v_stride)
+
+        # Number of gradient orientation bins
+        num_bins = 9
+
+        win_size = (x_cells * cell_size[0], y_cells * cell_size[1])
+
+        hog = cv2.HOGDescriptor(win_size, block_size, block_stride, cell_size, num_bins)
         for img in imageList:
             print(f"HOG提取第{i}张图像特征")
-            gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            cell_size = (6, 6)
-            num_cells_per_block = (2, 2)
-            block_size = (num_cells_per_block[0] * cell_size[0],
-                          num_cells_per_block[1] * cell_size[1])
-
-            # Calculate the number of cells that fitWithRSMAndBVSB in our image in the x and y directions
-            x_cells = gray_image.shape[1] // cell_size[0]
-            y_cells = gray_image.shape[0] // cell_size[1]
-
-            h_stride = 1
-            v_stride = 1
-
-            # Block Stride in pixels (horizantal, vertical). Must be an integer multiple of Cell Size
-            block_stride = (cell_size[0] * h_stride, cell_size[1] * v_stride)
-
-            # Number of gradient orientation bins
-            num_bins = 9
-
-            win_size = (x_cells * cell_size[0], y_cells * cell_size[1])
-
-            hog = cv2.HOGDescriptor(win_size, block_size, block_stride, cell_size, num_bins)
-
             # Compute the HOG Descriptor for the gray scale image
-            hog_descriptor = hog.compute(gray_image)
+            hog_descriptor = hog.compute(img)
             resultList.append(hog_descriptor.reshape((-1,)))
             print(f"HOG提取第{i}张图像完成")
             i+=1
