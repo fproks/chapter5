@@ -38,7 +38,12 @@ class Pretreatment():
         for img in imageList:
             _data = cv2.imread(img)
             if image_size is not None:
-                _data = cv2.resize(_data, (image_size, image_size))
+                try:
+                    _data = cv2.resize(_data, (image_size, image_size))
+                except Exception as e:
+                    print(str(e))
+                    print(f"error image is {img}")
+                    raise  e
             dataList.append(_data)
             filename = os.path.basename(img)
             targetList.append(int(filename.split("_")[0]))
@@ -55,7 +60,10 @@ class Pretreatment():
         for file in os.listdir(rootPath):
             file_path = os.path.join(rootPath, file)
             if os.path.isfile(file_path):
-                result.append(file_path)
+                if file_path.endswith(r".jpg"):
+                    result.append(file_path)
+                else:
+                    print(f"not image delete it: {file_path}")
             else:
                 result.extend(Pretreatment._getfileList(file_path))
         return result
@@ -78,7 +86,9 @@ class Pretreatment():
         model = Pretreatment.make_model()
         img_to_tensor = transforms.ToTensor()
         resultList = []
+        i=0
         for img in imageList:
+            print(f"VGG提取第{i}张图像特征")
             tensor = img_to_tensor(img)
             if torch.cuda.is_available():
                 tensor = tensor.cuda()
@@ -86,6 +96,8 @@ class Pretreatment():
             result = model(Variable(tensor))
             result_npy = result.data.cpu().numpy()
             resultList.append(result_npy[0].tolist())
+            print(f"VGG提取第{i}张图像完成")
+            i+=1
         return resultList
 
     @staticmethod
@@ -149,8 +161,9 @@ class Pretreatment():
         des_list = []
         kps_list = []
         numWords = 1000
-
+        i=0
         for img in imageList:
+            print(f"HOG提取第{i}张图像特征")
             gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
             cell_size = (6, 6)
             num_cells_per_block = (2, 2)
@@ -177,7 +190,8 @@ class Pretreatment():
             # Compute the HOG Descriptor for the gray scale image
             hog_descriptor = hog.compute(gray_image)
             resultList.append(hog_descriptor.reshape((-1,)))
-
+            print(f"HOG提取第{i}张图像完成")
+            i+=1
         return resultList
 
     # 整体RSM，防止对每一个数据RSM之后，每个数据RMS获取的数据维度不同。
@@ -198,16 +212,49 @@ class Pretreatment():
         return np.sort(np.random.permutation(np.array(range(Dimension)))[0:PresetD])
 
     @staticmethod
-    def dimensionWithPCA(data,n_components=300):
+    def dimensionWithPCA(data, n_components=300):
         pca = PCA(n_components=300)
         return pca.fit_transform(data)
 
+    @staticmethod
+    def removeDataAsToLess(data: np.ndarray, target: np.ndarray, lessFilter=10):
+        deleteIndexArray = []
+        nuq = np.unique(target)
+        for i in nuq:
+            if np.sum(target == i) < lessFilter:
+                tmp = np.argwhere(target == i)
+                deleteIndexArray.extend(tmp.tolist())
+        data = np.delete(data, deleteIndexArray, axis=0)
+        target = np.delete(target, deleteIndexArray).flatten().astype(int)
+        return data, target
+
 
 if __name__ == '__main__':
-    [a, b] = Pretreatment.readGrayImageToDATA(r"F:\dataset4\flowers17\flowers17\test", image_size=500)
-    print(len(a))
-    print(len(b))
-
+    #[a, b] = Pretreatment.readGrayImageToDATA(r"E:\data_chapter5\256_ObjectCategories")
+    #print(len(a))
+    #print(len(b))
+    #np.savez("caltech256Data.npz",data=a,target=b)
+    d=np.load("caltech256Data.npz")
+    a=d['data']
+    b=d['target']
+    #sio.savemat("caltech256Data.mat",{'data':a,'target':b})
+    data=Pretreatment.featureExtractionVGG(a)
+    print('VGG特征提取完成，进行保存')
+    data=np.array(data)
+    target=np.array(b)
+    np.savez('caltech256-vgg.npz',data=data,target=target)
+    #sio.savemat('caltech256-vgg.mat',{'data':data,'target':target})
+    print("开始提取HOG特征")
+    data=Pretreatment.featureExtractionHOG(a)
+    data=np.array(data)
+    np.savez('caltech256-HOG.npz', data=data, target=target)
+    #sio.savemat('caltech256-HOG.mat',{'data':data,'target':target})
+    print("HOG特征提取结束，开始提取SIFT特征")
+    data=Pretreatment.featureExtractionSIFT(a)
+    data=np.array(data)
+    np.savez('caltech256-SIFT.npz', data=data, target=target)
+    #sio.savemat('caltech256-SIFT.mat',{'data':data,'target':target})
+    print("---------------------FINISH----------------------------------")
 # print('start extract features by VGG16')
 # [a, b] = Pretreatment.readGrayImageToDATA("../image/source")
 # print('得到图像数据,开始特征提取')
