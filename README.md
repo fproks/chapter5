@@ -11,6 +11,7 @@ co-training with VGG16 、RSM and BVSB
 
 # Requirements
 
-- Python 3.8
+- Python 3.7
 - Pytorch 1.9.0
 - numpy 1.20.2
+- opencv-python=3.4.2.16
