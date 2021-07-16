@@ -13,6 +13,7 @@ from torch.autograd import Variable
 from sklearn import preprocessing
 from scipy.cluster.vq import *
 import scipy.io as sio
+import gc
 
 '''
 https://bbs.csdn.net/topics/392551610
@@ -43,7 +44,7 @@ class Pretreatment():
                 except Exception as e:
                     print(str(e))
                     print(f"error image is {img}")
-                    raise  e
+                    raise e
             dataList.append(_data)
             filename = os.path.basename(img)
             targetList.append(int(filename.split("_")[0]))
@@ -97,101 +98,108 @@ class Pretreatment():
             result_npy = result.data.cpu().numpy()
             resultList.append(result_npy[0].tolist())
             print(f"VGG提取第{i}张图像完成")
-            i+=1
+            i += 1
         return resultList
 
     @staticmethod
-    def featureExtractionSIFT(imageList: list) -> list:
-        resultList = []
+    def featureExtractionSIFT(imageList: list, targetList: np.ndarray) -> Tuple[list, list]:
         des_list = []
-        kps_list = []
+        target_modified = []
         numWords = 1000
+        i = 0
         # SIFT特征计算
         sift = cv2.xfeatures2d.SIFT_create()
+        print('正在提取特征SIFT！')
         for img in imageList:
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            kpts, des = sift.detectAndCompute(gray, None)
+            try:
+                gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+                kpts, des = sift.detectAndCompute(gray, None)
+                # kps_list.append(kpts)
+                if des is not None:
+                    des_list.append((i, des))
+                    target_modified.append(targetList[i])
+            except Exception as e:
+                print(str(e))
+            i = i + 1
+            if i % 100 == 0:
+                print('已提取' + str(i) + '张')
+        print(f'去除掉没有sift特征的数据后剩余数据个数为{len(target_modified)}')
 
-            kps_list.append(kpts)
-            des_list.append((img, des))
-
+        del imageList, targetList, sift
+        gc.collect()
         # Stack all the descriptors vertically in a numpy array
         # image_path为图片路径，descriptor为对应图片的特征
         # 将所有特征纵向堆叠起来,每行当做一个特征词
+        print('将所有特征纵向堆叠起来,每行当做一个特征词')
         descriptors = des_list[0][1]
+        # print(descriptors)
         for image_path, descriptor in des_list[1:]:
             # vstack对矩阵进行拼接，将所有的特征word拼接到一起
-            # print descriptor.shape, descriptors.shape
-            # if descriptor != None:
             descriptors = np.vstack((descriptors, descriptor))
-
         # 对特征词使用k-menas算法进行聚类
-        print("Start k-means: %d words, %d key points" % (numWords, descriptors.shape[0]))
-        # "Start k-means: %d words, %d key points" % (numWords, descriptors.shape[0])
+        print(f"K-means聚类类中心个数{numWords},数据量{descriptors.shape[0]}")
         # 最后输出的结果其实是两维的,第一维是聚类中心,第二维是损失distortion
         voc, variance = kmeans(descriptors, numWords, iter=1)
-
+        del descriptors, variance
+        gc.collect()
         # 初始化一个bag of word矩阵，每行表示一副图像，每列表示一个视觉词，下面统计每副图像中视觉词的个数
-        im_features = np.zeros((len(imageList), numWords), "float32")
-        for i in range(len(imageList)):
+        print('进行词袋计算')
+        im_features = np.zeros((len(des_list), numWords), "float32")
+        for i in range(len(des_list)):
             # 计算每副图片的所有特征向量和voc中每个特征word的距离，返回为匹配上的word
-            descriptor = des_list[i][1]
+            # descriptor = des_list[i][1]
             # if descriptor != None:
             # 根据聚类中心将所有数据进行分类des_list[i][1]为数据, voc则是kmeans产生的聚类中心.
             # vq输出有两个:一是各个数据属于哪一类的label,二是distortion
             words, distance = vq(des_list[i][1], voc)
             for w in words:
                 im_features[i][w] += 1
-
+            if i % 100 == 0:
+                print('已计算' + str(i) + '张')
+        del des_list, voc
+        gc.collect()
         # Perform Tf-Idf vectorization
         nbr_occurences = np.sum((im_features > 0) * 1, axis=0)
-        idf = np.array(np.log((1.0 * len(imageList) + 1) / (1.0 * nbr_occurences + 1)), 'float32')
+        idf = np.array(np.log((1.0 * len(target_modified) + 1) / (1.0 * nbr_occurences + 1)), 'float32')
 
         # L2归一化
         im_features = im_features * idf
         im_features = preprocessing.normalize(im_features, norm='l2')
-        # im_features = preprocessing.transform(im_features)
         print('cal_bow 结束了')
         print(im_features)
-        return im_features
+        return im_features, target_modified
 
     @staticmethod
     def featureExtractionHOG(imageList: list) -> list:
         resultList = []
-        des_list = []
-        kps_list = []
-        numWords = 1000
-        i=0
+        i = 0
+        imageSize = (128, 128)  # 重置所有图像数据的大小为128
+        cell_size = (16, 16)
+        num_cells_per_block = (1, 1)
+        block_size = (num_cells_per_block[0] * cell_size[0],
+                      num_cells_per_block[1] * cell_size[1])
+        # Calculate the number of cells that fitWithRSMAndBVSB in our image in the x and y directions
+        x_cells = imageSize[0] // cell_size[0]
+        y_cells = imageSize[1] // cell_size[1]
+        h_stride = 1
+        v_stride = 1
+
+        # Block Stride in pixels (horizantal, vertical). Must be an integer multiple of Cell Size
+        block_stride = (cell_size[0] * h_stride, cell_size[1] * v_stride)
+
+        # Number of gradient orientation bins
+        num_bins = 9
+
+        win_size = (x_cells * cell_size[0], y_cells * cell_size[1])
+        hog = cv2.HOGDescriptor(win_size, block_size, block_stride, cell_size, num_bins)
         for img in imageList:
             print(f"HOG提取第{i}张图像特征")
-            gray_image = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            cell_size = (6, 6)
-            num_cells_per_block = (2, 2)
-            block_size = (num_cells_per_block[0] * cell_size[0],
-                          num_cells_per_block[1] * cell_size[1])
-
-            # Calculate the number of cells that fitWithRSMAndBVSB in our image in the x and y directions
-            x_cells = gray_image.shape[1] // cell_size[0]
-            y_cells = gray_image.shape[0] // cell_size[1]
-
-            h_stride = 1
-            v_stride = 1
-
-            # Block Stride in pixels (horizantal, vertical). Must be an integer multiple of Cell Size
-            block_stride = (cell_size[0] * h_stride, cell_size[1] * v_stride)
-
-            # Number of gradient orientation bins
-            num_bins = 9
-
-            win_size = (x_cells * cell_size[0], y_cells * cell_size[1])
-
-            hog = cv2.HOGDescriptor(win_size, block_size, block_stride, cell_size, num_bins)
-
-            # Compute the HOG Descriptor for the gray scale image
-            hog_descriptor = hog.compute(gray_image)
+            img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+            img = cv2.resize(img, (128, 128))
+            hog_descriptor = hog.compute(img)
             resultList.append(hog_descriptor.reshape((-1,)))
             print(f"HOG提取第{i}张图像完成")
-            i+=1
+            i += 1
         return resultList
 
     # 整体RSM，防止对每一个数据RSM之后，每个数据RMS获取的数据维度不同。
@@ -228,32 +236,30 @@ class Pretreatment():
         target = np.delete(target, deleteIndexArray).flatten().astype(int)
         return data, target
 
-
 if __name__ == '__main__':
-    #[a, b] = Pretreatment.readGrayImageToDATA(r"E:\data_chapter5\256_ObjectCategories")
-    #print(len(a))
-    #print(len(b))
-    #np.savez("caltech256Data.npz",data=a,target=b)
-    d=np.load("caltech256Data.npz")
-    a=d['data']
-    b=d['target']
-    #sio.savemat("caltech256Data.mat",{'data':a,'target':b})
-    data=Pretreatment.featureExtractionVGG(a)
+    # [a, b] = Pretreatment.readGrayImageToDATA(r"E:\data_chapter5\256_ObjectCategories")
+    # print(len(a))
+    # print(len(b))
+    # np.savez("caltech256Data.npz",data=a,target=b)
+    d = np.load("caltech256Data.npz")
+    a = d['data']
+    b = d['target']
+    # sio.savemat("caltech256Data.mat",{'data':a,'target':b})
+    data = Pretreatment.featureExtractionVGG(a)
     print('VGG特征提取完成，进行保存')
-    data=np.array(data)
-    target=np.array(b)
-    np.savez('caltech256-vgg.npz',data=data,target=target)
-    #sio.savemat('caltech256-vgg.mat',{'data':data,'target':target})
+    data = np.array(data)
+    target = np.array(b)
+    np.savez('caltech256-vgg.npz', data=data, target=target)
+    # sio.savemat('caltech256-vgg.mat',{'data':data,'target':target})
     print("开始提取HOG特征")
-    data=Pretreatment.featureExtractionHOG(a)
-    data=np.array(data)
+    data = Pretreatment.featureExtractionHOG(a)
+    data = np.array(data)
     np.savez('caltech256-HOG.npz', data=data, target=target)
-    #sio.savemat('caltech256-HOG.mat',{'data':data,'target':target})
+    # sio.savemat('caltech256-HOG.mat',{'data':data,'target':target})
     print("HOG特征提取结束，开始提取SIFT特征")
-    data=Pretreatment.featureExtractionSIFT(a)
-    data=np.array(data)
+    [data,target] = Pretreatment.featureExtractionSIFT(a,target)
     np.savez('caltech256-SIFT.npz', data=data, target=target)
-    #sio.savemat('caltech256-SIFT.mat',{'data':data,'target':target})
+    # sio.savemat('caltech256-SIFT.mat',{'data':data,'target':target})
     print("---------------------FINISH----------------------------------")
 # print('start extract features by VGG16')
 # [a, b] = Pretreatment.readGrayImageToDATA("../image/source")
