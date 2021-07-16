@@ -87,7 +87,7 @@ class Pretreatment():
         model = Pretreatment.make_model()
         img_to_tensor = transforms.ToTensor()
         resultList = []
-        i = 0
+        i=0
         for img in imageList:
             print(f"VGG提取第{i}张图像特征")
             tensor = img_to_tensor(img)
@@ -235,7 +235,6 @@ class Pretreatment():
         data = np.delete(data, deleteIndexArray, axis=0)
         target = np.delete(target, deleteIndexArray).flatten().astype(int)
         return data, target
-
 
 if __name__ == '__main__':
     # [a, b] = Pretreatment.readGrayImageToDATA(r"E:\data_chapter5\256_ObjectCategories")
