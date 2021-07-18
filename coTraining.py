@@ -147,7 +147,10 @@ class COTraining(object):
         LOGGER.debug(f"训练器1 筛选出来{len(index1)}个数据")
         LOGGER.debug(f"训练器2筛选出来{len(index2)}个数据")
         id = np.intersect1d(index1, index2)
-        data_index = sameIndex[id]
+        if len(id)>0:
+            data_index = sameIndex[id]
+        else:
+            data_index=[]
         LOGGER.debug(f'均满足条件的数据个数有{len(id)}个')
         return data_index
 
