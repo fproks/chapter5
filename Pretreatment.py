@@ -87,7 +87,7 @@ class Pretreatment():
         model = Pretreatment.make_model()
         img_to_tensor = transforms.ToTensor()
         resultList = []
-        i=0
+        i = 0
         for img in imageList:
             print(f"VGG提取第{i}张图像特征")
             tensor = img_to_tensor(img)
@@ -116,7 +116,7 @@ class Pretreatment():
                 kpts, des = sift.detectAndCompute(gray, None)
                 # kps_list.append(kpts)
                 if des is not None:
-                    des_list.append((i, des))
+                    des_list.append(des)
                     target_modified.append(targetList[i])
             except Exception as e:
                 print(str(e))
@@ -131,11 +131,9 @@ class Pretreatment():
         # image_path为图片路径，descriptor为对应图片的特征
         # 将所有特征纵向堆叠起来,每行当做一个特征词
         print('将所有特征纵向堆叠起来,每行当做一个特征词')
-        descriptors = des_list[0][1]
         # print(descriptors)
-        for image_path, descriptor in des_list[1:]:
-            # vstack对矩阵进行拼接，将所有的特征word拼接到一起
-            descriptors = np.vstack((descriptors, descriptor))
+        descriptors = np.vstack(des_list)
+        # vstack对矩阵进行拼接，将所有的特征word拼接到一起
         # 对特征词使用k-menas算法进行聚类
         print(f"K-means聚类类中心个数{numWords},数据量{descriptors.shape[0]}")
         # 最后输出的结果其实是两维的,第一维是聚类中心,第二维是损失distortion
@@ -151,7 +149,7 @@ class Pretreatment():
             # if descriptor != None:
             # 根据聚类中心将所有数据进行分类des_list[i][1]为数据, voc则是kmeans产生的聚类中心.
             # vq输出有两个:一是各个数据属于哪一类的label,二是distortion
-            words, distance = vq(des_list[i][1], voc)
+            words, distance = vq(des_list[i], voc)
             for w in words:
                 im_features[i][w] += 1
             if i % 100 == 0:
@@ -195,7 +193,7 @@ class Pretreatment():
         for img in imageList:
             print(f"HOG提取第{i}张图像特征")
             img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-            img = cv2.resize(img, (128, 128))
+            img = cv2.resize(img, imageSize)
             hog_descriptor = hog.compute(img)
             resultList.append(hog_descriptor.reshape((-1,)))
             print(f"HOG提取第{i}张图像完成")
@@ -236,6 +234,7 @@ class Pretreatment():
         target = np.delete(target, deleteIndexArray).flatten().astype(int)
         return data, target
 
+
 if __name__ == '__main__':
     # [a, b] = Pretreatment.readGrayImageToDATA(r"E:\data_chapter5\256_ObjectCategories")
     # print(len(a))
@@ -243,30 +242,34 @@ if __name__ == '__main__':
     # np.savez("caltech256Data.npz",data=a,target=b)
     d = np.load("caltech256Data.npz")
     a = d['data']
-    b = d['target']
+    target = d['target']
+    sizes = len(target)
     # sio.savemat("caltech256Data.mat",{'data':a,'target':b})
-    data = Pretreatment.featureExtractionVGG(a)
-    print('VGG特征提取完成，进行保存')
-    data = np.array(data)
-    target = np.array(b)
-    np.savez('caltech256-vgg.npz', data=data, target=target)
+    # data = Pretreatment.featureExtractionVGG(a)
+    # print('VGG特征提取完成，进行保存')
+    # data = np.array(data)
+    # target = np.array(b)
+    # np.savez('caltech256-vgg.npz', data=data, target=target)
     # sio.savemat('caltech256-vgg.mat',{'data':data,'target':target})
     print("开始提取HOG特征")
     data = Pretreatment.featureExtractionHOG(a)
     data = np.array(data)
     np.savez('caltech256-HOG.npz', data=data, target=target)
     # sio.savemat('caltech256-HOG.mat',{'data':data,'target':target})
-    print("HOG特征提取结束，开始提取SIFT特征")
-    [data,target] = Pretreatment.featureExtractionSIFT(a,target)
-    np.savez('caltech256-SIFT.npz', data=data, target=target)
+    # print("HOG特征提取结束，开始提取SIFT特征")
+    # for i in range(12):
+    #     start = i * 3000
+    #     end = min((i + 1) * 3000, sizes)
+    #     print(f"开始提取第{start}到第{end}个数据的SIFT特征")
+    #     if start < sizes:
+    #         data = a[start:end]
+    #         tmp_target = target[start:end]
+    #         [data, tmp_target] = Pretreatment.featureExtractionSIFT(data, tmp_target)
+    #         gc.collect()
+    #         np.savez(f'caltech256-SIFT-{i}.npz', data=data, target=tmp_target)
+    #         print(f'第{start}个数据到第{end}个数据 SIFT 特征提取结束,共获取数据{len(tmp_target)}个')
+    #     else:
+    #         print(f"所有数据特征都已提取结束，SIFT算法结束,start={start}")
+    #         break
     # sio.savemat('caltech256-SIFT.mat',{'data':data,'target':target})
     print("---------------------FINISH----------------------------------")
-# print('start extract features by VGG16')
-# [a, b] = Pretreatment.readGrayImageToDATA("../image/source")
-# print('得到图像数据,开始特征提取')
-# data = Pretreatment.featureExtractionVGG(a)
-# print('特征提取完成，开始保存')
-# data = np.array(data)
-# target = np.array(b)
-# sio.savemat('vggdata.mat', {'data': data, 'target': target})
-# print("特征数据保存为vggdata.mat")
