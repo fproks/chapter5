@@ -3,6 +3,12 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 import torchvision.transforms as transform
+from torch.utils.data import random_split
+import torch.utils.data as Data
+import torchvision
+import torchvision.transforms as transforms
+import torch.optim as optim
+import scipy.io as sio
 
 
 # 用于ResNet18和34的残差块，用的是2个3x3的卷积
@@ -137,72 +143,68 @@ def test():
 https://blog.csdn.net/qq_36370187/article/details/103103382
 
 """
-test()
+
 
 
 def PretreatmentData():
-    import torch
-    from torch.utils.data import random_split
-    import torch.utils.data as Data
-    train_x = torch.randn(10, 8)
-    train_y = torch.randn(10, )
-    import torchvision
-    import torchvision.transforms as transforms
-    import torch.optim as optim
-
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     '''
     transforms.Compose 这个类的主要作用是串联多个图片变换的操作
     transforms.RandomCrop  裁剪大小
     RandomHorizontalFlip   水平翻转
     Normalize  标准化
     '''
-    transfrom_train = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-    ])
-    trainset = torchvision.datasets.CIFAR10(root="./data", train=True, download=True, transform=transfrom_train)
-
-    transform_test = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-    ])
-    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
-    print(type(trainset))
-    print(type(testset))
-    train = np.transpose(np.concatenate((trainset.data, testset.data)), [0, 3, 1, 2])
-    target = trainset.targets + testset.targets
-    print(train.shape)
-    print(len(target))
-    # tr=transforms.ToTensor()(train)
-    # print(tr.shape)
-    dataset = Data.TensorDataset(torch.tensor(train).float(), torch.tensor(target).long())
+    # transfrom_train = transforms.Compose([
+    #     transforms.ToTensor(),
+    #     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    # ])
+    # trainset = torchvision.datasets.CIFAR10(root="./data", train=True, download=True, transform=transfrom_train)
+    #
+    # transform_test = transforms.Compose([
+    #     transforms.ToTensor(),
+    #     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    # ])
+    # testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
+    # print(type(trainset))
+    # print(type(testset))
+    # train = np.transpose(np.concatenate((trainset.data, testset.data)), [0, 3, 1, 2])
+    # target = trainset.targets + testset.targets
+    # print(train.shape)
+    # print(len(target))
+    # # tr=transforms.ToTensor()(train)
+    # # print(tr.shape)
+    # dataset = Data.TensorDataset(torch.tensor(train).float(), torch.tensor(target).long())
+    dataset = loadSTL10()
     print(len(dataset))
-    train_data, eval_data = random_split(dataset, [round(0.05 * train.shape[0]), round(0.95 * train.shape[0])],
+    train_data, eval_data = random_split(dataset, [round(0.05 * dataset.tensors[0].shape[0]),
+                                                   round(0.95 * dataset.tensors[0].shape[0])],
                                          generator=torch.Generator().manual_seed(42))  # 把数据机随机切分训练集和验证集
     print(len(train_data))
-    train_loader = Data.DataLoader(dataset=train_data, batch_size=100, shuffle=True, num_workers=0, drop_last=False)
-    test_loader = Data.DataLoader(dataset=eval_data, batch_size=100, shuffle=False, num_workers=2)
-    # for step,(train_x,train_y) in enumerate(loader):
-    #     print(step,':',(train_x,train_y))
-    net = ResNet18()
+    train_loader = Data.DataLoader(dataset=train_data, batch_size=50, shuffle=True, num_workers=2, drop_last=False)
+    test_loader = Data.DataLoader(dataset=eval_data, batch_size=500, shuffle=False, num_workers=2)
+    net = ResNet18(linear_size=64).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
+    print(f"train data size is {len(train_loader)}")
+    print(f"test data size is {len(test_loader)}")
+
+    images,labeles=eval_data.dataset.tensors
+    images,labeles=images.to(device),labeles.to(device)
+    net.train()
     for epoch in range(0, 100):
         print(f'\n EPOCH: {epoch + 1}')
-        net.train()
         sum_loss = 0.0
         correct = 0.0
         total = 0.0
         for i, data in enumerate(train_loader, 0):
             length = len(train_loader)
             inputs, labeles = data
-            print(inputs.shape)
-            optimizer.zero_grad()
+            inputs, labeles = inputs.to(device), labeles.to(device)
+            optimizer.zero_grad()  # 梯度归零
             outputs = net(inputs)
-            loss = criterion(outputs, labeles)
-            loss.backward()
-            optimizer.step()
-
+            loss = criterion(outputs, labeles)  # 交叉熵损失函数
+            loss.backward()  # 反向传播计算梯度值
+            optimizer.step()  # 梯度下降，更新参数值
             sum_loss += loss.item()
             _, predicted = torch.max(outputs.data, 1)
             total += labeles.size(0)
@@ -210,26 +212,55 @@ def PretreatmentData():
             print(
                 f'[epoch:{epoch + 1},iter:{i + 1 + epoch * length}] Loss:{sum_loss / (i + 1):.3f} '
                 f'|Acc:{100. * correct / total:.3f}')
-            if sum_loss<=.01 or correct==total:
-                print(f"train stop when loss == {sum_loss} ,epoch:{epoch+1},iter:{i+1+epoch*length}")
+            if sum_loss <= .01:
+                print(f"train stop when loss == {sum_loss} ,epoch:{epoch + 1},iter:{i + 1 + epoch * length}")
                 break
-        if sum_loss<=.01 or correct==total:
+        if sum_loss <= .01:
             break
 
     print('Waiting Test...')
+
     with torch.no_grad():
         correct = 0
         total = 0
-        for i,data in enumerate(test_loader,0):
-            net.eval()
+        for i, data in enumerate(test_loader, 0):
+            net.eval()  # 固定参数
             images, labeles = data
+            images, labeles = images.to(device), labeles.to(device)
             outputs = net(images)
             _, predicted = torch.max(outputs.data, 1)
             total += labeles.size(0)
-            tmp_corr=(predicted==labeles).sum()
-            print(f'Test {i} ac is ------->{100*tmp_corr/labeles.size(0):.3f}')
+            tmp_corr = (predicted == labeles).sum()
+            print(f'Test {i} ac is ------->{100 * tmp_corr / labeles.size(0):.3f}')
             correct += tmp_corr
-        print(f'Test \‘ ac is:{100 * correct / total:.3f}')
+        print(f'Test  ac is:{100 * correct / total:.3f}')
+
+
+def loadSTL10():
+    from sklearn.preprocessing import LabelEncoder
+    a = sio.loadmat("./data_set/test.mat")
+    data = a['X']
+    target1 = a['y']
+    data1 = np.reshape(data, (8000, 3, 96, 96))
+    data1 = np.transpose(data1, [0, 3, 2, 1])  #更改维度，
+    b = sio.loadmat("./data_set/train.mat")
+    data = b['X']
+    target2 = b['y']
+    data2 = np.reshape(data, (-1, 3, 96, 96))
+    data2 = np.transpose(data2, [0, 3, 2, 1])
+    data = np.concatenate((data1, data2))  #合并数据
+    target = LabelEncoder().fit_transform(np.squeeze(np.concatenate((target1, target2))))
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(64),
+        transforms.RandomHorizontalFlip(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    ])
+    res = []
+    for d in data:
+        res.append(transform(d))
+    data = torch.stack(res)
+    return Data.TensorDataset(data.float(), torch.tensor(target).long())
 
 
 if __name__ == '__main__':
