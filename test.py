@@ -129,21 +129,11 @@ def ResNet152():
     return ResNet(Bottleneck, [3, 8, 36, 3])
 
 
-def test():
-    net = ResNet18(64)
-    a = np.random.random((64, 64, 3))
-    b = transform.ToTensor()(a).to(torch.float32)
-    print(b.shape)
-    y = net(torch.unsqueeze(b, 0))
-    print(y.size())
-    print(y)
-
 
 """
 https://blog.csdn.net/qq_36370187/article/details/103103382
 
 """
-
 
 
 def PretreatmentData():
@@ -154,42 +144,23 @@ def PretreatmentData():
     RandomHorizontalFlip   水平翻转
     Normalize  标准化
     '''
-    # transfrom_train = transforms.Compose([
-    #     transforms.ToTensor(),
-    #     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-    # ])
-    # trainset = torchvision.datasets.CIFAR10(root="./data", train=True, download=True, transform=transfrom_train)
-    #
-    # transform_test = transforms.Compose([
-    #     transforms.ToTensor(),
-    #     transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
-    # ])
-    # testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform_test)
-    # print(type(trainset))
-    # print(type(testset))
-    # train = np.transpose(np.concatenate((trainset.data, testset.data)), [0, 3, 1, 2])
-    # target = trainset.targets + testset.targets
-    # print(train.shape)
-    # print(len(target))
-    # # tr=transforms.ToTensor()(train)
-    # # print(tr.shape)
-    # dataset = Data.TensorDataset(torch.tensor(train).float(), torch.tensor(target).long())
-    dataset = loadSTL10()
-    print(len(dataset))
-    train_data, eval_data = random_split(dataset, [round(0.05 * dataset.tensors[0].shape[0]),
-                                                   round(0.95 * dataset.tensors[0].shape[0])],
+    dataset=loadCIFAR()
+    #dataset = loadMNIST()
+    label_size=32
+    #label_size=dataset.tensors[0].shape[2]
+    print(label_size)
+
+    train_data, eval_data = random_split(dataset, [round(0.05 * 60000),
+                                                   round(0.95 * 60000)],
                                          generator=torch.Generator().manual_seed(42))  # 把数据机随机切分训练集和验证集
     print(len(train_data))
     train_loader = Data.DataLoader(dataset=train_data, batch_size=50, shuffle=True, num_workers=2, drop_last=False)
     test_loader = Data.DataLoader(dataset=eval_data, batch_size=500, shuffle=False, num_workers=2)
-    net = ResNet18(linear_size=64).to(device)
+    net = ResNet18(linear_size=label_size).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
     print(f"train data size is {len(train_loader)}")
     print(f"test data size is {len(test_loader)}")
-
-    images,labeles=eval_data.dataset.tensors
-    images,labeles=images.to(device),labeles.to(device)
     net.train()
     for epoch in range(0, 100):
         print(f'\n EPOCH: {epoch + 1}')
@@ -242,13 +213,13 @@ def loadSTL10():
     data = a['X']
     target1 = a['y']
     data1 = np.reshape(data, (8000, 3, 96, 96))
-    data1 = np.transpose(data1, [0, 3, 2, 1])  #更改维度，
+    data1 = np.transpose(data1, [0, 3, 2, 1])  # 更改维度，
     b = sio.loadmat("./data_set/train.mat")
     data = b['X']
     target2 = b['y']
     data2 = np.reshape(data, (-1, 3, 96, 96))
     data2 = np.transpose(data2, [0, 3, 2, 1])
-    data = np.concatenate((data1, data2))  #合并数据
+    data = np.concatenate((data1, data2))  # 合并数据
     target = LabelEncoder().fit_transform(np.squeeze(np.concatenate((target1, target2))))
     transform = transforms.Compose([
         transforms.ToTensor(),
@@ -262,6 +233,36 @@ def loadSTL10():
     data = torch.stack(res)
     return Data.TensorDataset(data.float(), torch.tensor(target).long())
 
+
+def loadCIFAR():
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    ])
+    trainset = torchvision.datasets.CIFAR10(root="./data", train=True, download=True, transform=transform)
+    testset = torchvision.datasets.CIFAR10(root='./data', train=False, download=True, transform=transform)
+    train = np.transpose(np.concatenate((trainset.data, testset.data)), [0, 3, 1, 2])
+    target = trainset.targets + testset.targets
+    dataset = Data.TensorDataset(torch.tensor(train).float(), torch.tensor(target).long())
+    return dataset
+
+
+def loadMNIST():
+    transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Resize(32),
+        transforms.Grayscale(num_output_channels=3),
+        transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
+    ])
+    trainset=torchvision.datasets.MNIST(root="./data",train=True,download=True,transform=transform)
+    # testset=torchvision.datasets.MNIST(root="./data",train=False,download=True,transform=transform)
+    # train=torch.cat([trainset.data,testset.data],dim=0)
+    # target=torch.cat([trainset.targets,testset.targets],dim=0)
+    # print(train.shape)
+    # print(target.shape)
+    # return  Data.TensorDataset(train.float(),target.long())
+    print(trainset.data.shape)
+    return trainset
 
 if __name__ == '__main__':
     PretreatmentData()
