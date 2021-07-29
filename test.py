@@ -112,22 +112,17 @@ class ResNet(nn.Module):
 def ResNet18(linear_size=32):
     return ResNet(BasicBlock, [2, 2, 2, 2], linear_size=linear_size)
 
-
 def ResNet34():
     return ResNet(BasicBlock, [3, 4, 6, 3])
-
 
 def ResNet50():
     return ResNet(Bottleneck, [3, 4, 6, 3])
 
-
 def ResNet101():
     return ResNet(Bottleneck, [3, 4, 23, 3])
 
-
 def ResNet152():
     return ResNet(Bottleneck, [3, 8, 36, 3])
-
 
 
 """
@@ -144,14 +139,13 @@ def PretreatmentData():
     RandomHorizontalFlip   水平翻转
     Normalize  标准化
     '''
-    dataset=loadCIFAR()
-    #dataset = loadMNIST()
-    label_size=32
-    #label_size=dataset.tensors[0].shape[2]
+    # dataset=loadCIFAR()
+    # dataset = loadMNIST()
+    dataset, label_size, data_size = loadSTL10()
+    # label_size=dataset.tensors[0].shape[2]
     print(label_size)
-
-    train_data, eval_data = random_split(dataset, [round(0.05 * 60000),
-                                                   round(0.95 * 60000)],
+    train_data, eval_data = random_split(dataset, [round(0.05 * data_size),
+                                                   round(0.95 * data_size)],
                                          generator=torch.Generator().manual_seed(42))  # 把数据机随机切分训练集和验证集
     print(len(train_data))
     train_loader = Data.DataLoader(dataset=train_data, batch_size=50, shuffle=True, num_workers=2, drop_last=False)
@@ -231,7 +225,8 @@ def loadSTL10():
     for d in data:
         res.append(transform(d))
     data = torch.stack(res)
-    return Data.TensorDataset(data.float(), torch.tensor(target).long())
+    print(target.shape)
+    return Data.TensorDataset(data.float(), torch.tensor(target).long()), 64, target.shape[0]
 
 
 def loadCIFAR():
@@ -244,25 +239,29 @@ def loadCIFAR():
     train = np.transpose(np.concatenate((trainset.data, testset.data)), [0, 3, 1, 2])
     target = trainset.targets + testset.targets
     dataset = Data.TensorDataset(torch.tensor(train).float(), torch.tensor(target).long())
-    return dataset
+    return dataset, 32, len(target)
 
 
 def loadMNIST():
     transform = transforms.Compose([
+        #transforms.ToPILImage,
+        transforms.Grayscale(num_output_channels=3),  # 转为RGB图像
+        transforms.Resize([32, 32]),
+        transforms.RandomHorizontalFlip(),
         transforms.ToTensor(),
-        transforms.Resize(32),
-        transforms.Grayscale(num_output_channels=3),
         transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010))
     ])
-    trainset=torchvision.datasets.MNIST(root="./data",train=True,download=True,transform=transform)
-    # testset=torchvision.datasets.MNIST(root="./data",train=False,download=True,transform=transform)
-    # train=torch.cat([trainset.data,testset.data],dim=0)
-    # target=torch.cat([trainset.targets,testset.targets],dim=0)
-    # print(train.shape)
-    # print(target.shape)
-    # return  Data.TensorDataset(train.float(),target.long())
-    print(trainset.data.shape)
-    return trainset
+
+    trainset = torchvision.datasets.MNIST(root="./data", train=True, download=True, transform=transform)
+    # print(trainset.data.shape)
+    # res=[]
+    # for d in trainset.data:
+    #     res.append(transform(d))
+    # data=torch.stack(res)
+    # print(data.shape)
+    # return Data.TensorDataset(trainset.data,trainset.targets)
+    return trainset, 32, len(trainset.targets)
+
 
 if __name__ == '__main__':
     PretreatmentData()
