@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
-import torchvision.transforms as transform
 from torch.utils.data import random_split
 import torch.utils.data as Data
 import torchvision
@@ -148,13 +147,13 @@ def PretreatmentData():
                                                    round(0.95 * data_size)],
                                          generator=torch.Generator().manual_seed(42))  # 把数据机随机切分训练集和验证集
     print(len(train_data))
+    print(f"train data size is {round(0.05 * data_size)}")
+    print(f"test data size is {round(0.95 * data_size)}")
     train_loader = Data.DataLoader(dataset=train_data, batch_size=50, shuffle=True, num_workers=2, drop_last=False)
     test_loader = Data.DataLoader(dataset=eval_data, batch_size=500, shuffle=False, num_workers=2)
     net = ResNet18(linear_size=label_size).to(device)
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.SGD(net.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
-    print(f"train data size is {len(train_loader)}")
-    print(f"test data size is {len(test_loader)}")
     net.train()
     for epoch in range(0, 100):
         print(f'\n EPOCH: {epoch + 1}')
